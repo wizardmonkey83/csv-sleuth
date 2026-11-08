@@ -39,8 +39,19 @@ def _child_env():
         "OMP_NUM_THREADS": "1",
     }
 
+def _truncate(text: str | None, limit: int = TEXT_LIMIT) -> str | None:
+    if text is None or len(text) <= limit:
+        return text
+    return text[:limit] + f"\n... [truncated {len(text) - limit} chars]"
+
+
+def _as_text(value: str | bytes | None) -> str | None:
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
+
 @traceable
-def run_code(csv_data_path: str, code: str, timeout: float = TIMEOUT_S):
+def run_code(code: str, csv_data_path: str, timeout: float = TIMEOUT_S):
     if not csv_data_path:
         raise ValueError("Error: no csv_data_path provided.")
 
@@ -55,27 +66,41 @@ def run_code(csv_data_path: str, code: str, timeout: float = TIMEOUT_S):
         file_to_run.write_text(code)
 
         try:
-
             process = subprocess.run(
                 [sys.executable, "-I", str(HARNESS_PATH)],
                 cwd=workdir,
                 env=_child_env(),
                 capture_output=True,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
             )
 
-            if Path(workdir / "report.json").exists:
-                report = json.loads(Path(workdir / "report.json").read_text(encoding="utf-8"))
-                result = report["result"]
-                ok = report["ok"]
-                error = report["error"]
-                traceback = report["traceback"]
-
-                return Output(ok=ok, result=result[:TEXT_LIMIT], error=error, traceback=traceback, timed_out=False, exit_code=process.returncode, stdout=process.stdout[:TEXT_LIMIT], stderr=process.stderr[:TEXT_LIMIT], notes="Successful run.")
-            else:
-                return Output(exit_code=process.returncode, stdout=process.stdout[:TEXT_LIMIT], stderr=process.stderr[:TEXT_LIMIT], notes="Failed to locate 'report.json'.")
-            
-
         except subprocess.TimeoutExpired as exc:
-            return Output(timed_out=True, stdout=process.stdout[:TEXT_LIMIT], stderr=process.stderr[:TEXT_LIMIT], notes="Process timed out. Process output until that point was captured and returned.")
+            return Output(
+                ok=False,
+                timed_out=True,
+                error=f"Timed out after {timeout:g}s.",
+                stdout=_truncate(_as_text(exc.stdout)),
+                stderr=_truncate(_as_text(exc.stderr)),
+            )
+
+        report_path = workdir / "report.json"
+        if not report_path.exists():
+            return Output(
+                ok=False,
+                error="Sandbox exited without writing a report (it may have crashed).",
+                exit_code=process.returncode,
+                stdout=_truncate(process.stdout),
+                stderr=_truncate(process.stderr),
+            )
+
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        return Output(
+            ok=report["ok"],
+            result=_truncate(report["result"]),
+            error=report["error"],
+            traceback=_truncate(report["traceback"]),
+            exit_code=process.returncode,
+            stdout=_truncate(process.stdout),
+            stderr=_truncate(process.stderr),
+        )
