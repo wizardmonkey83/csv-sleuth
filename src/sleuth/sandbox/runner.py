@@ -12,11 +12,11 @@ from langsmith import traceable
 @dataclass
 class Output:
     # running the code
-    ok: bool | None = None
+    ok: bool = False
     result: str | None = None
     error: str | None = None
     traceback: str | None = None
-    timed_out: bool | None = None
+    timed_out: bool = False
 
     # process 
     exit_code: int | None = None
@@ -50,7 +50,7 @@ def _as_text(value: str | bytes | None) -> str | None:
         return value.decode(errors="replace")
     return value
 
-@traceable
+@traceable(name="run_code", run_type="tool")
 def run_code(code: str, csv_data_path: str, timeout: float = TIMEOUT_S):
     if not csv_data_path:
         raise ValueError("Error: no csv_data_path provided.")
