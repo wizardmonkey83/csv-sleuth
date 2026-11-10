@@ -23,8 +23,8 @@ SYSTEM_PROMPT = ""
 model = init_chat_model(model=OPENAI_MODEL, temperature=0)
 planner = model.with_structured_output(Plan)
 
-def plan_node(state: SleuthState) -> dict:
-    profile_text = render_profile(state["profile"])
+def plan_node(profile: str) -> dict:
+    profile_text = render_profile(profile=profile)
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content=f"This is the rendered profile of the dataset: \n\n{profile_text}")
