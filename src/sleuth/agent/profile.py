@@ -188,8 +188,3 @@ def profile_node(state: dict) -> dict:
     """Read the CSV path from the state and add the profile to it."""
     profile = build_profile(state["csv_path"])
     return {"profile": profile}
- 
- 
-if __name__ == "__main__":
-    csv_path = sys.argv[1]
-    print(render_profile(build_profile(csv_path)))
